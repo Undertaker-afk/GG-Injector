@@ -1,0 +1,60 @@
+name: Build & Release Injector
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -G "Ninja" -DCMAKE_CXX_STANDARD=17
+
+      - name: Build Injector
+        run: cmake --build build --config Release --target CS2_Injector
+
+      - name: Prepare Release Artifact
+        run: |
+          mkdir -p release
+          copy build\bin\CS2_Injector.exe release\
+          copy src\main.cpp release\  # Optional: include source for transparency
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CS2_Injector_Binaries
+          path: release/
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CS2_Injector_Binaries
+          path: artifact/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifact/*
+          draft: false
+          generate_release_notes: true
+          body: |
+            ## 📦 CS2 TUI Manual Mapper Injector
+            - **Auto-Elevates**: Built with `requireAdministrator` manifest.
+            - **TUI Interface**: Console-based input for process name & DLL path.
+            - **Freeze → Map → Sync → Unfreeze**: Safe injection flow.
+            - **Standalone**: Zero external dependencies. Compiles with MSVC/MinGW.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
